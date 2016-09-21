@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Intro To Cats</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body {
+        font-family: 'Droid Serif', 'Helvetica';
+      }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz', 'Gill Sans';
+        font-weight: normal;
+      }
+      .remark-slide-content {
+        font-size: 24px;
+      }
+      .remark-code, .remark-inline-code {
+        font-family: 'Ubuntu Mono', 'Consolas', 'Courier New';
+        font-size: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Intro to Cats
+Cody Allen
+
+---
+
+# The Agenda
+
+1. Introduce Cats.
+2. Use it in a real(ish) world example.
+3. Dig into what we've done.
+4. Update of the current state of Cats.
+
+OR
+
+1. Introduce Cats.
+2. Type classes.
+3. Laws.
+4. Update of the current state of Cats.
+
+---
+
+# Cats
+
+A library _and community_ for functional programming in Scala.
+---
+
+# Influences
+
+Heavily influenced by:
+- Haskell libraries (semigroupoids)
+- Scalaz
+- Category Theory
+
+... but you don't need to know those.
+
+---
+
+# Down to Business
+
+##  Imports
+
+These imports are assumed throughout the presentation.
+
+```tut:silent
+import cats._
+import cats.data._
+import cats.implicits._
+```
+
+---
+
+# The Task
+
+Hmm ceedubs what should this be?
+
+Cool things to include:
+- Adding maps together
+- non-empty structures
+- traverse?
+- 
+---
+
+```tut:book
+final case class Average(cnt: Long, avg: Double)
+
+object Average {
+  def apply(value: Double): Average = new Average(1L, value)
+
+  implicit val semigroupAverage: Semigroup[Average] = new Semigroup[Average] {
+    def combine(a1: Average, a2: Average): Average = new Average(a1.cnt + )
+  }
+}
+
+1 + 3
+
+"1" + 3
+
+1 + "3"
+```
+
+---
+
+class: center, middle
+
+# Thanks!
+
+TODO ceedubs link to code and slides
+
+## Questions?
+
+ </textarea>
+    <script src="remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
