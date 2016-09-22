@@ -14,7 +14,10 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.typelevel" %% "cats-core" % "0.7.2"
+  // This includes laws as well. For production use, you'll probably want `core`
+  // and then the laws modules under the `test` scope.
+  "org.typelevel" %% "cats" % "0.7.2",
+  "org.scalatest" %% "scalatest" % "3.0.0-M8"
 )
 
 tutSettings

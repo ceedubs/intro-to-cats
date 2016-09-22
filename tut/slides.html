@@ -15,12 +15,13 @@
         font-family: 'Yanone Kaffeesatz', 'Gill Sans';
         font-weight: normal;
       }
+      .grouping { background-color: beige }
       .remark-slide-content {
-        font-size: 24px;
+        font-size: 20px;
       }
       .remark-code, .remark-inline-code {
         font-family: 'Ubuntu Mono', 'Consolas', 'Courier New';
-        font-size: 24px;
+        font-size: 20px;
       }
     </style>
   </head>
@@ -29,85 +30,560 @@
 
 class: center, middle
 
-# Intro to Cats
+# intro to cats
 Cody Allen
 
 ---
 
-# The Agenda
+name: agenda
 
-1. Introduce Cats.
-2. Use it in a real(ish) world example.
-3. Dig into what we've done.
-4. Update of the current state of Cats.
+# the agenda
 
-OR
-
-1. Introduce Cats.
-2. Type classes.
-3. Laws.
-4. Update of the current state of Cats.
+1. cats
+2. type classes
+3. laws
+4. property-based testing
+4. current state of cats
 
 ---
 
-# Cats
+# cats
 
 A library _and community_ for functional programming in Scala.
+
 ---
 
-# Influences
+# community
 
-Heavily influenced by:
-- Haskell libraries (semigroupoids)
-- Scalaz
-- Category Theory
+The cats community strives to lower barriers to functional programming in Scala through:
+
+- an inclusive, welcoming, and safe environment
+  - adhering to the [typelevel code of conduct](http://typelevel.org/conduct.html)
+- learning resources
+  - [docs and tutorials](http://typelevel.org/cats/)
+  - an active [gitter channel](https://gitter.im/typelevel/cats) (over 1000 people and counting!)
+- an open [source](https://github.com/typelevel/cats) library
+
+---
+
+# influences
+
+heavily influenced by:
+- haskell libraries (semigroupoids)
+- scalaz
+- math (algebra and category theory)
 
 ... but you don't need to know those.
 
 ---
 
-# Down to Business
-
-##  Imports
+#  imports
 
 These imports are assumed throughout the presentation.
 
 ```tut:silent
 import cats._
-import cats.data._
+import cats.data.NonEmptyList
 import cats.implicits._
+
+// in tests
+import org.scalatest.FunSuite
+import org.typelevel.discipline.scalatest.Discipline
+import cats.kernel.laws.GroupLaws
+import org.scalacheck.{Arbitrary, Gen}
 ```
 
 ---
 
-# The Task
+# the task
 
-Hmm ceedubs what should this be?
+We have a bunch of page-view data.
 
-Cool things to include:
-- Adding maps together
-- non-empty structures
-- traverse?
-- 
+Calculate the average page-view duration for various user segments.
+
+Data is spread across nodes, so we'll need to combine various intermediate calculations.
+
+Given the average for node `A` and node `B` we'll need to calculate the combined average.
+
 ---
 
-```tut:book
-final case class Average(cnt: Long, avg: Double)
+# Averages
 
-object Average {
-  def apply(value: Double): Average = new Average(1L, value)
+Let's start simple:
 
-  implicit val semigroupAverage: Semigroup[Average] = new Semigroup[Average] {
-    def combine(a1: Average, a2: Average): Average = new Average(a1.cnt + )
+```tut:silent
+case class Avg(value: Double)
+```
+
+--
+
+We can write a `combine` function such that:
+
+```scala
+Avg(2.0) combine Avg(4.0)
+```
+
+will produce `Avg(3.0)`.
+
+---
+
+# semigroups
+
+Semigroups combine elements of the same type into another element of that type.
+
+```tut:silent
+// in `Example` namespace so we don't clobber the one provided by cats
+object Example {
+  trait Semigroup[A] {
+    def combine(a1: A, a2: A): A
   }
 }
-
-1 + 3
-
-"1" + 3
-
-1 + "3"
 ```
+
+This `combine` operation must be _associative_. We'll get to that later.
+
+???
+
+Note that I'm focusing on how these are commonly represented in the Scala world and that I'm glossing over details of the mathematical definition.
+
+Computer science is really young. Math has been around much longer. It's nice to piggy-back off of millenia of study and experience.
+
+---
+
+# type classes
+
+Instead of making the `Avg` class extend `Semigroup` (the OO approach), we create an _instance_ of the type class for `Avg`.
+
+```tut:silent
+implicit val semigroupAvg: Semigroup[Avg] = new Semigroup[Avg] {
+  def combine(a1: Avg, a2: Avg): Avg = Avg((a1.value + a2.value) / 2.0)
+}
+```
+
+```tut:book
+semigroupAvg.combine(Avg(2.0), Avg(4.0))
+```
+
+---
+
+# type class syntax
+
+Instead of:
+
+```tut:silent
+semigroupAvg.combine(Avg(2.0), Avg(4.0))
+```
+
+It would be nice if we could do something like:
+
+```scala
+Avg(2.0) combine Avg(4.0)
+```
+
+--
+
+Since we made our type class instance `implicit`, we can add this syntax helper:
+
+```tut:silent
+object Example {
+  implicit class SemigroupOps[A](a: A)(implicit sa: Semigroup[A]) {
+    def combine(a2: A): A = sa.combine(a, a2)
+  }
+}
+```
+
+---
+
+# type class syntax (cont.)
+
+Cats includes this syntax for us:
+
+```tut:book
+Avg(2.0) combine Avg(4.0)
+```
+
+There's also an alias for the symbolically-inclined:
+
+```tut:book
+Avg(2.0) |+| Avg(4.0)
+```
+
+---
+
+# semigroup laws
+
+Semigroups must be associative:
+
+```scala
+(a1 combine a2) combine a3
+```
+
+is equivalent to:
+
+```scala
+a1 combine (a2 combine a3)
+```
+
+---
+
+# laws
+
+It's common (and encouraged!) for type classes to have laws defining their behavior.
+
+Laws can help us:
+- reason about behavior
+- safely substitute optimizations
+  - The _functor identity_ law says that `x.map(identity)` is equivalent to `x`, so if we see `List(1, 2, 3).map(identity)` we can replace it with `List(1, 2, 3)`.
+- test our implementation
+
+---
+
+# Eq
+
+`Eq` is a type class for equality.
+
+```tut:silent
+object Example {
+  trait Eq[A] {
+    def eqv(a1: A, a2: A): Boolean
+  }
+}
+```
+
+---
+
+# Eq laws
+
+- reflexivity
+  - .grouping[`a eqv a`] is true
+- symmetry
+  - .grouping[`a1 eqv a2`] implies .grouping[`a2 eqv a1`]
+- transitivity
+  - .grouping[`(a1 eqv a2) && (a2 eqv a3)`] implies .grouping[`a1 eqv a3`]
+- antisymmetry
+  - .grouping[`a1 eqv a2`] implies .grouping[`f(a1) eqv f(a2)`]
+
+---
+
+# property-based tests
+
+Generate data and ensure that it passes certain properties.
+
+Example from the [Scalacheck home page](https://www.scalacheck.org/):
+
+```scala
+property("startsWith") = forAll { (a: String, b: String) =>
+  (a+b).startsWith(a)
+}
+```
+
+String data is generated by the implicit `Arbitrary[String]` instance. `Arbitrary` is a type class for generating data.
+---
+
+# property-based tests with laws
+
+Cats includes modules that help you test that your type class intances satisfy the laws.
+
+In order to test our `Semigroup[Avg]` instances, we'll need an `Eq[Avg]` instance so the tests know wheter results are equivalent:
+
+```tut:silent
+implicit val eqAvg: Eq[Avg] = Eq.by(_.value)
+```
+
+--
+
+We'll also need to generate arbitrary `Avg` values:
+
+```tut:silent
+implicit val arbAvg: Arbitrary[Avg] = Arbitrary(
+  Gen.chooseNum(-1.0e9, 1.0e9).map(Avg(_)))
+```
+
+---
+
+# testing our semigroup
+
+```tut:silent
+class AvgTests extends FunSuite with Discipline {
+  checkAll("Avg", GroupLaws[Avg].semigroup)
+}
+```
+
+```tut:book
+org.scalatest.run(new AvgTests)
+```
+---
+
+# associativity violation
+
+```tut:silent
+val x = Avg(0.0)
+val y = Avg(12.0)
+val z = Avg(12.0)
+```
+
+```tut:book
+(x combine y) combine z
+
+x combine (y combine z)
+```
+---
+
+# example failure test output
+
+```
+- Avg.semigroup.associativity *** FAILED ***
+  GeneratorDrivenPropertyCheckFailedException was thrown during property evaluation.
+   (Discipline.scala:14)
+    Falsified after 0 successful property evaluations.
+    Location: (Discipline.scala:14)
+    Occurred when passed generated values (
+      arg0 = Avg(-4.387066426000916E8),
+      arg1 = Avg(7.692464704471469E8),
+      arg2 = Avg(-8.073288449590896E8)
+    )
+    Label of failing property:
+      (Avg(-3.21029465517781E8) ?== Avg(-2.2887391492803147E8)) failed
+```
+
+???
+
+This is an example of a test failure. Since there is some nondeterminism in the tests, you aren't guaranteed to get one.
+---
+
+# weighted average
+
+Okay we didn't think that through. We should be using the _weighted_ average.
+
+```tut:silent
+case class Avg(weight: Long, avg: Double)
+
+implicit val semigroupAvg: Semigroup[Avg] = new Semigroup[Avg] {
+  def combine(a1: Avg, a2: Avg): Avg = Avg(
+    weight = a1.weight + a2.weight,
+    avg = (a1.weight * a1.avg + a2.weight * a2.avg) /
+      (a1.weight + a2.weight))
+}
+```
+
+---
+
+# testing the weighted average
+
+First let's give it a quick spot check:
+
+```tut:silent
+def single(value: Double): Avg = Avg(1L, value)
+
+val x = single(0.0)
+val y = single(12.0)
+val z = single(12.0)
+```
+
+```tut:book
+x combine (y combine z)
+
+(x combine y) combine z
+```
+
+Looking good so far.
+
+---
+
+# testing the weighted average (cont.)
+
+Now for equality we need to check both the `weight` and the `avg`. We'll use the `fromUniversalEquals` helper, since by default the case class will have the `equals` semantics that we want.
+
+```tut:silent
+implicit val eqAvg: Eq[Avg] = Eq.fromUniversalEquals
+```
+
+--
+
+We now need two different fields in our arbitrary data:
+
+```tut:silent
+implicit val arbAvg: Arbitrary[Avg] = Arbitrary(
+  for {
+    weight <- Gen.chooseNum(1L, 1e9.toLong)
+    avg <- Gen.chooseNum(-1.0e9, 1.0e9)
+  } yield Avg(weight, avg))
+```
+
+Our test itself doesn't change:
+
+```tut:silent
+class AvgTests extends FunSuite with Discipline {
+  checkAll("Avg", GroupLaws[Avg].semigroup)
+}
+```
+
+---
+
+# testing the weighted average (cont.)
+
+```tut:book
+org.scalatest.run(new AvgTests)
+```
+
+---
+
+# another associativity failure
+
+```
+Avg.semigroup.associativity *** FAILED ***
+GeneratorDrivenPropertyCheckFailedException was thrown during property evaluation.
+ (Discipline.scala:14)
+  Falsified after 0 successful property evaluations.
+  Location: (Discipline.scala:14)
+  Occurred when passed generated values (
+    arg0 = Avg(1,-5.164915425926655E8),
+    arg1 = Avg(1000000000,-1.0E9),
+    arg2 = Avg(716556116,-1.0)
+  )
+  Label of failing property:
+    (Avg(1716556117,-5.825617882978001E8) ?== Avg(1716556117,-5.825617882978E8)) failed
+```
+
+???
+
+This is an example of a failing test case. Since there is some nondetermism in the tests you aren't guaranteed to get one.
+---
+
+# floating point arithmetic isn't associative!
+
+```tut:silent
+val x = 0.1
+val y = 0.2
+val z = 0.3
+```
+
+```tut:book
+x + (y + z)
+
+(x + y) + z
+```
+---
+
+# what now?
+
+With minimal effort put into tests, the laws caught an associativity issue with floating point arithmetic that we likely wouldn't have caught on our own.
+
+We have a few options:
+- decide it's close enough and disable the tests
+- change the `Eq[Avg]` instance in the tests to have a fudge-factor in the `Double` comparison
+  - defining the behavior in a type class instance instead of the structure itself is handy!
+  - but this is still playing with fire
+- use another numeric type that doesn't suffer from precision issues
+ - such as integers or [spire](https://github.com/non/spire)'s `Rational`
+
+---
+
+# good old integer arithmetic
+
+In this case, we know that `sum` is a duration of a page view, so we can use a `Long` to represent milliseconds.
+
+If we keep track of a cumulative weight and sum then we can avoid floating point arithmetic until we are ready for the final result.
+
+```tut:silent
+case class Avg(weight: Long, sum: Long) {
+  def avg: Double = sum.toDouble / weight.toDouble
+}
+
+implicit val semigroupAvg: Semigroup[Avg] = new Semigroup[Avg] {
+  def combine(a1: Avg, a2: Avg): Avg = Avg(
+    weight = a1.weight + a2.weight,
+    sum = a1.sum + a2.sum)
+}
+```
+
+---
+# testing the new approach
+
+Let's give it another spot check:
+
+```tut:silent
+def single(value: Long): Avg = Avg(1L, value)
+
+val x = single(0)
+val y = single(12)
+val z = single(12)
+```
+
+```tut:book
+val r1 = x combine (y combine z)
+
+val r2 = (x combine y) combine z
+
+r1.avg
+
+r2.avg
+```
+
+Looking good so far again...
+
+---
+
+# setting up the tests again
+
+```tut:silent
+// even if we compare values by the `avg` Double we don't hit floating
+// point associativity issues, because we do integer arithmetic up
+// until the final `avg` call that is used for comparison.
+implicit val eqAvg: Eq[Avg] = Eq.by(_.avg)
+
+implicit val arbAvg: Arbitrary[Avg] = Arbitrary(
+  for {
+    weight <- Gen.chooseNum(1L, 1e9.toLong)
+    sum <- Gen.chooseNum(-1e9.toLong, 1e9.toLong)
+  } yield Avg(weight, sum))
+
+class AvgTests extends FunSuite with Discipline {
+  checkAll("Avg", GroupLaws[Avg].semigroup)
+}
+```
+
+---
+
+# running the tests again
+
+```tut:book
+org.scalatest.run(new AvgTests)
+```
+
+No more associativity errors!
+
+---
+
+# semigroup tricks
+
+Now that we have a valid semigroup instance we can do some handy things with it.
+
+```tut:silent
+val (x, y, z) = (single(1L), single(2L), single(3L))
+```
+
+```tut:book
+Semigroup.combineAllOption(List(x, y, z))
+
+NonEmptyList.of(x, y, z).reduce
+
+Option(x) combine Option(y)
+
+Option(x) combine None
+
+Map("/home" -> x, "/about" -> y) |+| Map("/home" -> z, "/contact" -> x)
+```
+
+---
+template: agenda
+
+{{ content }}
+---
+
+# state of the cats
+
+TODO
 
 ---
 
@@ -115,7 +591,13 @@ class: center, middle
 
 # Thanks!
 
+Special thanks to Rob Norris (@tpolecat) for creating [tut](https://github.com/tpolecat/tut) and giving me permission to copy/paste his slide setup from [Fun and Games with Fix, Cofree, and Doobie](https://github.com/tpolecat/cofree).
+
+---
+
 TODO ceedubs link to code and slides
+
+---
 
 ## Questions?
 
