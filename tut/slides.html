@@ -35,6 +35,23 @@ Cody Allen
 
 ---
 
+# cats
+
+A library _and community_ for functional programming in Scala.
+
+The name is short for _categories_.
+
+---
+
+# who is this guy?
+
+- scala developer ~4 years
+- work on Verizon's iptv project (with many fantastic FP Scala devs)
+- one of 14 cats maintainers
+- [typelevel](http://typelevel.org/) member
+
+---
+
 name: agenda
 
 # the agenda
@@ -45,11 +62,9 @@ name: agenda
 4. property-based testing
 4. current state of cats
 
----
+???
 
-# cats
-
-A library _and community_ for functional programming in Scala.
+Poll the audience on whether they are familiar with cats, scalaz, type classes, property-based testing.
 
 ---
 
@@ -99,7 +114,7 @@ import org.scalacheck.{Arbitrary, Gen}
 
 We have a bunch of page-view data.
 
-Calculate the average page-view duration for various user segments.
+Calculate the average page-view duration for various pages.
 
 Data is spread across nodes, so we'll need to combine various intermediate calculations.
 
@@ -224,6 +239,14 @@ is equivalent to:
 a1 combine (a2 combine a3)
 ```
 
+--
+
+```tut:book
+(1 + 2) + 3
+
+1 + (2 + 3)
+```
+
 ---
 
 # laws
@@ -308,6 +331,8 @@ class AvgTests extends FunSuite with Discipline {
   checkAll("Avg", GroupLaws[Avg].semigroup)
 }
 ```
+
+--
 
 ```tut:book
 org.scalatest.run(new AvgTests)
@@ -555,7 +580,7 @@ No more associativity errors!
 
 ---
 
-# semigroup tricks
+# semigroup "tricks"
 
 Now that we have a valid semigroup instance we can do some handy things with it.
 
@@ -571,9 +596,41 @@ NonEmptyList.of(x, y, z).reduce
 Option(x) combine Option(y)
 
 Option(x) combine None
-
-Map("/home" -> x, "/about" -> y) |+| Map("/home" -> z, "/contact" -> x)
 ```
+
+---
+
+# combining maps
+
+We can `combine` values for the same keys in two different maps as long as we have a `Semigroup` instance for the value type.
+
+```tut:silent
+val node1Data = Map(
+  "/home" -> single(1L),
+  "/about" -> single(2L))
+
+val node2Data = Map(
+  "/home" -> single(3L),
+  "/contact" -> single(1L))
+
+val combined = node1Data combine node2Data
+```
+
+```tut:book
+println(combined)
+
+println(combined.mapValues(_.avg))
+```
+
+---
+
+# but wait; there's more
+
+`Semigroup` and `Eq` are just two type classes provided by cats. There's also much more including:
+- other type classes (`Monoid`, `Functor`, `Traverse`, `Monad`, ...)
+- data structures (`NonEmptyVector`, `Validated`, `Free`, ...)
+- `Eval`, an abstraction over strict/memoized/repeated computations
+- ... your contribution here ...
 
 ---
 template: agenda
@@ -583,7 +640,19 @@ template: agenda
 
 # state of the cats
 
-TODO
+https://github.com/typelevel/cats
+
+Current version is 0.7.2.
+
+Some fairly major recent changes:
+- use `Either` instead of `Xor`
+- `FunctorFilter` and `TraverseFilter`
+- tail recursive monadic binds (`tailRecM`)
+- more...
+
+--
+
+I'm not putting any estimates on a 1.0 release down in writing.
 
 ---
 
@@ -595,11 +664,17 @@ Special thanks to Rob Norris (@tpolecat) for creating [tut](https://github.com/t
 
 ---
 
-TODO ceedubs link to code and slides
+# resources
+
+- [this presentation](https://github.com/ceedubs/intro-to-cats)
+- [cats](http://typelevel.org/cats/)
+- [typelevel](http://typelevel.org/)
+- [scalacheck](https://www.scalacheck.org/)
+- [tut](https://github.com/tpolecat/tut)
 
 ---
 
-## Questions?
+# Questions?
 
  </textarea>
     <script src="remark-latest.min.js">
